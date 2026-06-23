@@ -53,14 +53,14 @@ multiplayer.onLeaderboardUpdate = (leaderboard) => {
 };
 
 // --- Lobby Logic ---
-loginForm.addEventListener('submit', (e) => {
+loginForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     const playerName = document.getElementById('player-name').value.trim();
     const roomId = document.getElementById('room-id').value.trim().toUpperCase();
 
     if (!playerName || !roomId) return;
 
-    const result = multiplayer.joinRoom(playerName, roomId);
+    const result = await multiplayer.joinRoom(playerName, roomId);
     if (result.success) {
         errorMsg.textContent = '';
         hudRoom.textContent = roomId;
