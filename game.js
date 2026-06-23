@@ -60,14 +60,23 @@ loginForm.addEventListener('submit', async (e) => {
 
     if (!playerName || !roomId) return;
 
-    const result = await multiplayer.joinRoom(playerName, roomId);
-    if (result.success) {
-        errorMsg.textContent = '';
-        hudRoom.textContent = roomId;
-        switchScreen('game');
-        initGame();
-    } else {
-        errorMsg.textContent = result.message;
+    errorMsg.textContent = 'Đang kết nối tới máy chủ...';
+    loginForm.querySelector('button').disabled = true;
+
+    try {
+        const result = await multiplayer.joinRoom(playerName, roomId);
+        if (result.success) {
+            errorMsg.textContent = '';
+            hudRoom.textContent = roomId;
+            switchScreen('game');
+            initGame();
+        } else {
+            errorMsg.textContent = result.message;
+        }
+    } catch (err) {
+        errorMsg.textContent = 'Lỗi kết nối: ' + err.message;
+    } finally {
+        loginForm.querySelector('button').disabled = false;
     }
 });
 
@@ -266,9 +275,24 @@ function gameOver() {
     gameActive = false;
     cancelAnimationFrame(animationId);
     
+    // Hiệu ứng chữ Game Over trên Canvas
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#ef4444';
+    ctx.font = 'bold 50px Outfit, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('GAME OVER', canvas.width/2, canvas.height/2 - 10);
+    ctx.fillStyle = '#fff';
+    ctx.font = '24px Outfit, sans-serif';
+    ctx.fillText(`Điểm của bạn: ${score}`, canvas.width/2, canvas.height/2 + 30);
+    
     // Lưu điểm & chuyển màn hình
     multiplayer.updateScore(score);
-    showLeaderboard();
+    
+    // Đợi 2 giây cho người chơi nhìn thấy điểm rồi mới chuyển sang Leaderboard
+    setTimeout(() => {
+        showLeaderboard();
+    }, 2000);
 }
 
 function drawBackground() {
@@ -349,14 +373,21 @@ function gameLoop() {
 
 // --- Leaderboard Logic ---
 function showLeaderboard() {
-    setTimeout(() => {
-        switchScreen('leaderboard');
-        lbRoomName.textContent = multiplayer.currentRoomId;
-        lbYourScore.textContent = score;
-        
-        const lbData = multiplayer.getRoomLeaderboard(multiplayer.currentRoomId);
-        renderLeaderboard(lbData);
-    }, 500); // Đợi nửa giây cho hiệu ứng nổ
+    switchScreen('leaderboard');
+    lbRoomName.textContent = multiplayer.currentRoomId;
+    lbYourScore.textContent = score;
+    
+    // Nếu có dữ liệu phòng, render ngay lập tức (tránh bị trống lúc mới hiện)
+    if (multiplayer.roomRef) {
+        multiplayer.roomRef.child('players').once('value', (snap) => {
+            const data = snap.val() || {};
+            const leaderboard = Object.keys(data).map(name => ({
+                name: name,
+                score: data[name].score
+            })).sort((a, b) => b.score - a.score);
+            renderLeaderboard(leaderboard);
+        });
+    }
 }
 
 function renderLeaderboard(data) {
