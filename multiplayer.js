@@ -1,90 +1,91 @@
-/**
- * Mock Backend sử dụng localStorage và BroadcastChannel
- * Giả lập Database Real-time cho phòng chơi và bảng xếp hạng
- */
-const GAME_ROOMS_KEY = 'antigravity_rooms';
+// Cấu hình Firebase của bạn
+const firebaseConfig = {
+    apiKey: "AIzaSyB7GEG6gSDRBxKFmuo0iG_wt-IsTaDyHWU",
+    authDomain: "test-aa50d.firebaseapp.com",
+    projectId: "test-aa50d",
+    storageBucket: "test-aa50d.firebasestorage.app",
+    messagingSenderId: "160629020295",
+    appId: "1:160629020295:web:d2d3e98690b729a7f68a22",
+    databaseURL: "https://test-aa50d-default-rtdb.firebaseio.com" // Đã tự động thêm link DB
+};
+
+// Khởi tạo Firebase
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
 
 class MultiplayerSystem {
     constructor() {
-        this.roomData = this.loadRooms();
         this.currentRoomId = null;
         this.currentPlayerName = null;
-        
-        // Sử dụng BroadcastChannel để đồng bộ giữa các tab trình duyệt (giả lập WebSocket)
-        this.channel = new BroadcastChannel('antigravity_game_channel');
-        this.channel.onmessage = (event) => {
-            if (event.data.type === 'UPDATE_ROOMS') {
-                this.roomData = this.loadRooms();
-                if (this.onLeaderboardUpdate && this.currentRoomId) {
-                    this.onLeaderboardUpdate(this.getRoomLeaderboard(this.currentRoomId));
-                }
-            }
-        };
-    }
-
-    loadRooms() {
-        try {
-            const data = localStorage.getItem(GAME_ROOMS_KEY);
-            return data ? JSON.parse(data) : {};
-        } catch (e) {
-            return {};
-        }
-    }
-
-    saveRooms() {
-        localStorage.setItem(GAME_ROOMS_KEY, JSON.stringify(this.roomData));
-        this.channel.postMessage({ type: 'UPDATE_ROOMS' });
+        this.roomRef = null;
+        this.onLeaderboardUpdate = null;
     }
 
     joinRoom(playerName, roomId) {
-        if (!this.roomData[roomId]) {
-            this.roomData[roomId] = { players: {} };
-        }
+        return new Promise((resolve) => {
+            const roomRef = db.ref('rooms/' + roomId + '/players');
+            
+            roomRef.once('value', (snapshot) => {
+                const players = snapshot.val() || {};
+                const playerNames = Object.keys(players);
+                
+                // Giới hạn 4 người
+                if (playerNames.length >= 4 && !players[playerName]) {
+                    resolve({ success: false, message: 'Phòng đã đầy (Tối đa 4 người).' });
+                    return;
+                }
 
-        const room = this.roomData[roomId];
-        const playerNames = Object.keys(room.players);
-        
-        // Giới hạn 4 người
-        if (playerNames.length >= 4 && !room.players[playerName]) {
-            return { success: false, message: 'Phòng đã đầy (Tối đa 4 người).' };
-        }
+                // Lưu thông tin người chơi hiện tại
+                this.currentRoomId = roomId;
+                this.currentPlayerName = playerName;
+                this.roomRef = db.ref('rooms/' + roomId);
 
-        if (!room.players[playerName]) {
-            room.players[playerName] = { score: 0, joinedAt: Date.now() };
-        }
+                // Thêm người chơi vào DB nếu chưa có
+                if (!players[playerName]) {
+                    roomRef.child(playerName).set({
+                        score: 0,
+                        joinedAt: firebase.database.ServerValue.TIMESTAMP
+                    });
+                }
 
-        this.currentRoomId = roomId;
-        this.currentPlayerName = playerName;
-        this.saveRooms();
+                // Lắng nghe sự thay đổi của phòng để cập nhật Leaderboard Real-time
+                this.roomRef.child('players').on('value', (snap) => {
+                    if (this.onLeaderboardUpdate) {
+                        const data = snap.val() || {};
+                        const leaderboard = Object.keys(data).map(name => ({
+                            name: name,
+                            score: data[name].score
+                        })).sort((a, b) => b.score - a.score);
+                        
+                        this.onLeaderboardUpdate(leaderboard);
+                    }
+                });
 
-        return { success: true };
+                resolve({ success: true });
+            });
+        });
     }
 
     updateScore(score) {
         if (!this.currentRoomId || !this.currentPlayerName) return;
 
-        const room = this.roomData[this.currentRoomId];
-        if (room && room.players[this.currentPlayerName]) {
-            // Chỉ cập nhật nếu điểm cao hơn
-            if (score > room.players[this.currentPlayerName].score) {
-                room.players[this.currentPlayerName].score = score;
-                this.saveRooms();
+        const playerRef = this.roomRef.child('players/' + this.currentPlayerName);
+        playerRef.once('value', (snapshot) => {
+            const currentData = snapshot.val();
+            // Chỉ cập nhật lên server nếu điểm mới cao hơn điểm cũ
+            if (!currentData || score > currentData.score) {
+                playerRef.update({ score: score });
             }
-        }
+        });
     }
 
-    getRoomLeaderboard(roomId) {
-        if (!this.roomData[roomId]) return [];
-        
-        const players = this.roomData[roomId].players;
-        return Object.keys(players)
-            .map(name => ({ name, score: players[name].score }))
-            .sort((a, b) => b.score - a.score);
-    }
-    
     leaveRoom() {
+        if (this.roomRef) {
+            this.roomRef.child('players').off(); // Tắt lắng nghe
+        }
         this.currentRoomId = null;
         this.currentPlayerName = null;
+        this.roomRef = null;
     }
 }
 
