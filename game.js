@@ -1,23 +1,41 @@
 // --- DOM Elements ---
 const screens = {
     lobby: document.getElementById('lobby-screen'),
+    waiting: document.getElementById('waiting-screen'),
+    dashboard: document.getElementById('teacher-dashboard'),
     game: document.getElementById('game-screen'),
     leaderboard: document.getElementById('leaderboard-screen')
 };
 
+// Lobby & Roles
+const roleSelection = document.getElementById('role-selection');
 const loginForm = document.getElementById('login-form');
+const btnShowStudent = document.getElementById('btn-show-student');
+const btnShowTeacher = document.getElementById('btn-show-teacher');
+const btnBackRole = document.getElementById('btn-back-role');
+const teacherCreating = document.getElementById('teacher-creating');
 const errorMsg = document.getElementById('lobby-error');
+
+// Waiting
+const waitRoomId = document.getElementById('wait-room-id');
+
+// Dashboard
+const dashRoomId = document.getElementById('dash-room-id');
+const playerCount = document.getElementById('player-count');
+const dashPlayersList = document.getElementById('dash-players-list');
+const btnStartGame = document.getElementById('btn-start-game');
+
+// Game UI
 const hudRoom = document.getElementById('hud-room');
 const hudScore = document.getElementById('hud-score');
-
 const canvas = document.getElementById('game-canvas');
 const ctx = canvas.getContext('2d');
 const instructionText = document.getElementById('game-instruction');
 
+// Leaderboard UI
 const lbRoomName = document.getElementById('lb-room-name');
 const lbYourScore = document.getElementById('lb-your-score');
 const lbList = document.getElementById('leaderboard-list');
-
 const btnPlayAgain = document.getElementById('btn-play-again');
 const btnLeaveRoom = document.getElementById('btn-leave-room');
 
@@ -45,14 +63,64 @@ function switchScreen(screenName) {
     screens[screenName].classList.add('active');
 }
 
-// Lắng nghe update bảng xếp hạng realtime
+// --- Multiplayer Listeners ---
 multiplayer.onLeaderboardUpdate = (leaderboard) => {
-    if (screens.leaderboard.classList.contains('active')) {
+    if (multiplayer.isTeacher) {
+        // Cập nhật trên Dashboard
+        dashPlayersList.innerHTML = '';
+        playerCount.textContent = leaderboard.length;
+        if (leaderboard.length > 0) btnStartGame.style.display = 'block';
+        
+        leaderboard.forEach((player, index) => {
+            const li = document.createElement('li');
+            li.className = `leaderboard-item rank-${index + 1}`;
+            li.innerHTML = `
+                <span class="player-name-lb">${index + 1}. ${player.name}</span>
+                <span class="player-score-lb">${player.score}</span>
+            `;
+            dashPlayersList.appendChild(li);
+        });
+    } else if (screens.leaderboard.classList.contains('active')) {
         renderLeaderboard(leaderboard);
     }
 };
 
+multiplayer.onGameStarted = () => {
+    if (!multiplayer.isTeacher) {
+        switchScreen('game');
+        initGame();
+    }
+};
+
 // --- Lobby Logic ---
+btnShowStudent.addEventListener('click', () => {
+    roleSelection.style.display = 'none';
+    loginForm.style.display = 'block';
+});
+
+btnBackRole.addEventListener('click', () => {
+    loginForm.style.display = 'none';
+    roleSelection.style.display = 'block';
+    errorMsg.textContent = '';
+});
+
+// Teacher creates room
+btnShowTeacher.addEventListener('click', async () => {
+    roleSelection.style.display = 'none';
+    teacherCreating.style.display = 'block';
+    
+    const result = await multiplayer.createRoom();
+    if (result.success) {
+        dashRoomId.textContent = result.roomId;
+        switchScreen('dashboard');
+    } else {
+        alert(result.message);
+        teacherCreating.style.display = 'none';
+        roleSelection.style.display = 'block';
+    }
+});
+
+// Student joins
 loginForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     const playerName = document.getElementById('player-name').value.trim();
@@ -61,23 +129,29 @@ loginForm.addEventListener('submit', async (e) => {
     if (!playerName || !roomId) return;
 
     errorMsg.textContent = 'Đang kết nối tới máy chủ...';
-    loginForm.querySelector('button').disabled = true;
+    loginForm.querySelector('button[type="submit"]').disabled = true;
 
     try {
         const result = await multiplayer.joinRoom(playerName, roomId);
         if (result.success) {
             errorMsg.textContent = '';
+            waitRoomId.textContent = roomId;
             hudRoom.textContent = roomId;
-            switchScreen('game');
-            initGame();
+            switchScreen('waiting');
         } else {
             errorMsg.textContent = result.message;
         }
     } catch (err) {
         errorMsg.textContent = 'Lỗi kết nối: ' + err.message;
     } finally {
-        loginForm.querySelector('button').disabled = false;
+        loginForm.querySelector('button[type="submit"]').disabled = false;
     }
+});
+
+// Teacher starts game
+btnStartGame.addEventListener('click', () => {
+    multiplayer.startGame();
+    btnStartGame.style.display = 'none'; // Ẩn nút sau khi bắt đầu
 });
 
 // --- Game Logic ---

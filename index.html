@@ -15,18 +15,61 @@
                 <h1 class="game-title">ANTI<span class="highlight">GRAVITY</span></h1>
                 <p class="subtitle">Đảo chiều trọng lực - Chinh phục không gian</p>
                 
-                <form id="login-form">
+                <div id="role-selection">
+                    <button id="btn-show-student" class="btn primary-btn" style="margin-bottom: 15px;">Học Sinh Vào Phòng</button>
+                    <button id="btn-show-teacher" class="btn secondary-btn">Giáo Viên Tạo Phòng</button>
+                </div>
+
+                <form id="login-form" style="display: none;">
                     <div class="input-group">
                         <label for="player-name">Tên của bạn</label>
                         <input type="text" id="player-name" placeholder="VD: Nguyễn Văn A" required maxlength="20">
                     </div>
                     <div class="input-group">
                         <label for="room-id">Mã Lớp Học</label>
-                        <input type="text" id="room-id" placeholder="VD: LOP10A1" required maxlength="10" autocomplete="off">
+                        <input type="text" id="room-id" placeholder="VD: A7B9K" required maxlength="10" autocomplete="off" style="text-transform: uppercase;">
                     </div>
                     <p id="lobby-error" class="error-msg"></p>
                     <button type="submit" class="btn primary-btn">Vào Phòng Chơi</button>
+                    <button type="button" id="btn-back-role" class="btn secondary-btn">Quay lại</button>
                 </form>
+
+                <div id="teacher-creating" style="display: none; padding: 20px;">
+                    <div class="loader" style="margin: 0 auto 15px;"></div>
+                    <p>Đang khởi tạo máy chủ phòng học...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- WAITING SCREEN -->
+        <div id="waiting-screen" class="screen">
+            <div class="glass-panel">
+                <h2>Đã vào phòng!</h2>
+                <p>Mã phòng: <strong id="wait-room-id" class="highlight code-big" style="font-size: 2rem;"></strong></p>
+                <div class="loader" style="margin: 30px auto;"></div>
+                <p class="subtitle">Vui lòng đợi giáo viên ấn BẮT ĐẦU...</p>
+            </div>
+        </div>
+
+        <!-- TEACHER DASHBOARD -->
+        <div id="teacher-dashboard" class="screen">
+            <div class="glass-panel" style="max-width: 600px;">
+                <h2>Bảng Điều Khiển Giáo Viên</h2>
+                <div class="room-code-display">
+                    Mã phòng của bạn: <strong id="dash-room-id" class="highlight code-big"></strong>
+                </div>
+                <p class="subtitle">Yêu cầu học sinh nhập mã này để vào phòng</p>
+                
+                <div class="players-waiting-box">
+                    <h3>Học sinh đã vào (<span id="player-count">0</span>):</h3>
+                    <ul id="dash-players-list" class="leaderboard-list">
+                        <!-- Sẽ được render bởi JS -->
+                    </ul>
+                </div>
+
+                <div class="action-buttons">
+                    <button id="btn-start-game" class="btn primary-btn" style="background: linear-gradient(135deg, var(--accent), #34d399); display: none;">BẮT ĐẦU GAME</button>
+                </div>
             </div>
         </div>
 
